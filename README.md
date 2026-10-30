@@ -49,7 +49,35 @@ still fetch one from Edge). It is checked against the live profile service befor
 `~/.config/booking/state.json` (0600, `BOOKING_HOME` moves it) or the OS keyring with `--keyring`.
 `BOOKING_COOKIE` overrides both. Exit 3 means there is no valid session (or it expired): log in again.
 
-Edge on CDP 9222 is needed only for `login --from-browser`, `--via browser` and the `aws-waf-token` refresh.
+Edge on CDP 9222 is needed only for `login --from-browser`, `--via browser` and the `aws-waf-token` refresh. Setup: [Browser on CDP 9222](#browser-on-cdp-9222-setup).
+
+## Browser on CDP 9222 (setup)
+
+The commands listed above as needing Edge drive a background tab in your own browser through the Chrome DevTools
+Protocol, so their requests carry a real browser's fingerprint and sign-in. The CLI never launches a browser;
+start one yourself with remote debugging on:
+
+```bash
+# Linux (Edge; google-chrome / chromium take the same flags)
+microsoft-edge-stable --remote-debugging-port=9222 --user-data-dir="$HOME/.config/microsoft-edge-debug"
+
+# macOS
+"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/Library/Application Support/Microsoft Edge Debug"
+```
+
+- `--user-data-dir` must point at a separate profile: Chromium-based browsers ignore `--remote-debugging-port` on
+  the default profile (Chrome 136+). Sign in to booking.com once inside this profile; it stays signed in across
+  restarts. If that profile is already open without the flag, quit the browser first: launching again only opens
+  a window in the running instance.
+- Check it: `curl -s http://127.0.0.1:9222/json/version` prints the browser version, and `booking doctor` shows
+  `cdp ok`. Another port or host: `--cdp http://127.0.0.1:9333` or `BOOKING_CDP=http://127.0.0.1:9333`.
+- `--remote-allow-origins` is not needed: the CLI connects without an `Origin` header (verified 2026-10-30), and
+  leaving it out keeps web pages from connecting. The port listens on 127.0.0.1 only; keep it that way, because
+  anything that can reach it controls the browser and every session in it.
+- The CLI only creates background tabs (`Target.createTarget(background=true)`), never focuses or touches yours,
+  closes its own when done, and blanks rather than closes the last tab so the browser does not quit. Run one
+  command at a time.
 
 ## Commands
 
