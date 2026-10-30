@@ -6,8 +6,8 @@ description: Use when searching Booking.com hotels (zh-tw, TWD), checking room r
 # booking - Booking.com hotels from a shell (no booking)
 
 `~/.local/bin/booking` -> `~/Projects/booking-cli/booking`. Python 3.8+ stdlib. Plain HTTPS with the cookies copied
-from the user's Edge (`booking login`; HTML pages need its `aws-waf-token`, GraphQL does not). Edge on CDP
-127.0.0.1:9222 is only used by `login`, the WAF-token refresh and `--via browser`; never launch Edge. Run ONE
+from the user's browser (`booking login`; HTML pages need its `aws-waf-token`, GraphQL does not). Edge on CDP
+127.0.0.1:9222 is only used by opt-in `login --from-browser`, the WAF-token refresh and `--via browser`; never launch Edge. Run ONE
 command at a time. Start with `booking doctor`; exit 3 = run `booking login`, exit 4 = WAF/blocked.
 
 - `booking suggest <text> --json` -> dest (`district:2883`), name, area, country.
@@ -22,7 +22,10 @@ command at a time. Start with `booking doctor`; exit 3 = run `booking login`, ex
 - `booking price <id>... --checkin --checkout ...` -> cheapest fitting total per hotel (hotel page) + card_total.
 - `booking trips [--status upcoming]` (read-only trips + reservations), `booking saved list|add|rm <id> [--yes]`
   (wishlist; dry run without --yes; verified by re-reading after every write).
-- `booking login|whoami|logout` (whoami = name, masked email, Genius level), `booking raw <path>` (GET only).
+- `booking login|whoami|logout` (whoami = name, masked email, Genius level), `booking raw <path>` (GET only). Login: never ask for or
+  type passwords, and never ask the user to paste cookies into chat. Tell the user: DevTools > Network > click any
+  www.booking.com page request > copy the `Cookie:` request header to the clipboard, then run `booking login`
+  themselves (or pipe it in on stdin). No usable Cookie header = exit 2 with those steps.
 
 Price rules: compare by `price_total` = stay total for the whole party and all rooms (含稅費及其他費用 when
 taxes_included). `extra_charges_possible` = a tax such as the Osaka accommodation tax is paid on top.
@@ -31,5 +34,5 @@ A search card can be a pricier free-cancellation rate while a cheaper non-refund
 `--pool` (default 100) hotels re-sorted by total; the pool is cached 15 min so `--page 2` continues it (`--fresh`
 re-reads). Multi-room searches can list one apartment that fits everyone; check `room`/`units`.
 
-Unverified: second WAF step (background tab), `--sort distance` order, non-TWD currency, signed-out login flow,
-keyring/clipboard login. NEVER book, hold, or pay; this CLI has no such command.
+Unverified: second WAF step (background tab), `--sort distance` order, non-TWD currency, signed-out `--from-browser`
+login flow, keyring login. NEVER book, hold, or pay; this CLI has no such command.

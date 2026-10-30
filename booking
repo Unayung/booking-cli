@@ -1504,11 +1504,24 @@ def _read_cookie_tty():
     return buf.decode("utf-8", "replace").splitlines()[0] if buf else ""
 
 
+LOGIN_HOWTO = ("no Booking.com Cookie header found. In the browser: DevTools > Network > click any "
+               "request to www.booking.com > Request Headers > copy the `Cookie:` value, "
+               "then run `booking login` again (or pipe it in)")
+
+
 def cmd_login(args):
-    if args.from_clipboard or args.cookie_stdin:
-        raw = _clipboard() if args.from_clipboard else (_read_cookie_tty() if sys.stdin.isatty() else sys.stdin.read())
+    default = not (args.from_clipboard or args.cookie_stdin or args.from_browser)
+    if default:
+        try:
+            raw = _clipboard() if sys.stdin.isatty() else sys.stdin.read()
+            clean_cookie(raw)
+        except Auth:
+            raise Usage(LOGIN_HOWTO)
+    if default or args.from_clipboard or args.cookie_stdin:
+        if not default:
+            raw = _clipboard() if args.from_clipboard else (_read_cookie_tty() if sys.stdin.isatty() else sys.stdin.read())
         cookies, ua = header_to_cookies(clean_cookie(raw)), os.environ.get("BOOKING_UA") or DEFAULT_UA
-        src = "clipboard" if args.from_clipboard else "stdin"
+        src = "clipboard" if args.from_clipboard or (default and sys.stdin.isatty()) else "stdin"
     else:
         cookies, ua = login_from_browser(args)
         src = f"browser {CDP}"
@@ -1817,9 +1830,9 @@ def build_parser():
     add_party(pc)
     pc.set_defaults(fn=cmd_price)
 
-    lg = sub.add_parser("login", parents=[common], help="save a signed-in Booking.com session")
+    lg = sub.add_parser("login", parents=[common], help="save a signed-in Booking.com session (default: Cookie header from stdin or clipboard)")
     g = lg.add_mutually_exclusive_group()
-    g.add_argument("--from-browser", action="store_true", help="(default) copy the session from Edge on CDP")
+    g.add_argument("--from-browser", action="store_true", help="(opt-in) copy the session from Edge on CDP")
     g.add_argument("--from-clipboard", action="store_true", help="Cookie header from the clipboard")
     g.add_argument("--cookie-stdin", action="store_true", help="paste/pipe a Cookie header")
     lg.add_argument("--wait", type=int, default=300, help="seconds to wait for you to sign in")

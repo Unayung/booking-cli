@@ -10,10 +10,10 @@ Every command takes `--json` and returns `{ok, data|error}`. Exit codes: 0 ok, 1
 
 Booking.com puts AWS WAF in front of its HTML pages: plain HTTPS without cookies gets HTTP 202 and a JS challenge.
 With the `aws-waf-token` cookie that Edge already holds, the pages answer 200. The site's GraphQL endpoint
-(`/dml/graphql`) answered without any cookie. `booking login` copies the booking.com cookies from your own Edge on CDP
-(`127.0.0.1:9222`, read-only) and checks them against the live profile service.
+(`/dml/graphql`) answered without any cookie. `booking login` takes the `Cookie` request header of your own signed-in
+browser session (see Login) and checks it against the live profile service.
 
-After that, every command uses plain HTTPS. Edge is not touched except by `login`, `--via browser` and the WAF
+After that, every command uses plain HTTPS. Edge on CDP 9222 is not touched except by `login --from-browser`, `--via browser` and the WAF
 refresh: when a page answers with the challenge, the CLI first takes Edge's current `aws-waf-token`. If that token
 is the same one, it opens one background tab on the home page so Edge passes the challenge, then takes the token
 again. Background tabs are created with `Target.createTarget(background=true)`, never focused, and closed afterwards.
@@ -22,6 +22,34 @@ If it is the last tab, it is blanked instead, so Edge does not quit. Run one com
 Browser state: Booking keeps no locale/currency cookie. Currency is set per request (`selected_currency=TWD`).
 Edge's own booking.com pages show HKD by default, and they still did after this CLI's TWD tabs. A background tab sets
 `bk_nav_search` (the last search, 30 min); the CLI puts it back the way it was before the tab opened.
+
+## Login
+
+Booking.com signs in with a password (+ verification), so the CLI never takes credentials. It logs in with the
+`Cookie` request header of a browser session you already have:
+
+1. In your browser: DevTools > Network > click any request to `www.booking.com` > Request Headers.
+2. Copy the value of `Cookie:` (with or without the leading `Cookie: `).
+3. Run `booking login`. It reads the clipboard, or stdin when piped.
+
+```bash
+booking login                   # Cookie header from stdin (piped) or the clipboard;
+                                #   nothing usable there = exit 2 with these steps
+booking login --from-clipboard  # clipboard only
+booking login --cookie-stdin    # paste (hidden) or pipe it
+booking login --keyring         # store it in the OS keyring instead of the file
+booking login --from-browser    # opt-in: copy the session from Edge on CDP 9222; if signed out, opens
+                                #   the sign-in page in a background tab (--wait 300)
+booking whoami | logout
+```
+
+The header must contain `bkng_sso_auth` (or `bkng_sso_session`); copy it from a page request so it also holds
+`aws-waf-token`, which the HTML pages need (`booking doctor` warns when it is missing; the WAF refresh can
+still fetch one from Edge). It is checked against the live profile service before saving to
+`~/.config/booking/state.json` (0600, `BOOKING_HOME` moves it) or the OS keyring with `--keyring`.
+`BOOKING_COOKIE` overrides both. Exit 3 means there is no valid session (or it expired): log in again.
+
+Edge on CDP 9222 is needed only for `login --from-browser`, `--via browser` and the `aws-waf-token` refresh.
 
 ## Commands
 
@@ -94,8 +122,8 @@ e.g. 心齋橋 = `district:2883` in 大阪) or `<type>:<id>` such as `city:-2409
 ## Limitations
 
 - Needs a signed-in session for Genius prices, `trips` and `saved` (`booking login`). Search works anonymously but
-  without member prices. `login` with a signed-out Edge (opens the sign-in page and waits) and
-  `--from-clipboard`/`--keyring` were not run live.
+  without member prices. `login --from-browser` with a signed-out Edge (opens the sign-in page and waits) and
+  `--keyring` were not run live.
 - The second WAF step (letting a background tab pass the challenge) was never needed today, so it is unverified.
 - No sponsored cards were seen in any search; detection relies on `showAdLabel` / `sponsoredListingData`, which the
   site's own JS uses as its ad flag.
